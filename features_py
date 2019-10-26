@@ -1,0 +1,116 @@
+# import stuff
+from sklearn import model_selection, preprocessing, linear_model, naive_bayes, metrics, svm
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
+from sklearn import decomposition, ensemble
+import pandas as pd
+import xgboost, numpy, textblob, string
+from tensorflow.keras.preprocessing import text, sequence
+from tensorflow.keras import layers, models, optimizers
+import nltk
+import os, pickle, datetime
+import warnings
+warnings.filterwarnings('always') 
+print(os.getcwd())
+nltk.download('punkt')
+nltk.download('averaged_perceptron_tagger')
+print('imports successful')
+# import dataframes
+df_train = pd.read_csv(r'C:\Data\Python\cdc_text2\cdc_train_py.csv')
+df_valid = pd.read_csv(r'C:\Data\Python\cdc_text2\cdc_test_py.csv')
+# train_test_split
+train_x, valid_x, train_y, valid_y = model_selection.train_test_split(df_train[['text', 'sex', 'age']], df_train['event'])
+# encode the input?
+# encoder = preprocessing.LabelEncoder()
+# df_train = encoder.fit_transform(df_train['event'])
+# df_valid = encoder.fit_transform(df_valid['event'])
+
+# create a count vectorizer object 
+count_vect = CountVectorizer(analyzer='word', token_pattern=r'\w{1,}')
+count_vect.fit(df_train['text'])
+
+# transform the training and validation data using count vectorizer object
+xtrain_count =  count_vect.transform(train_x)
+xvalid_count =  count_vect.transform(valid_x)
+
+# word level tf-idf
+tfidf_vect = TfidfVectorizer(analyzer='word', token_pattern=r'\w{1,}', max_features=5000)
+tfidf_vect.fit(train_x['text'])
+xtrain_tfidf =  tfidf_vect.transform(train_x)
+xvalid_tfidf =  tfidf_vect.transform(valid_x)
+print('word level tfdif completed')
+# ngram level tf-idf 
+tfidf_vect_ngram = TfidfVectorizer(analyzer='word', token_pattern=r'\w{1,}', ngram_range=(2,3), max_features=5000)
+tfidf_vect_ngram.fit(df_train['text'])
+xtrain_tfidf_ngram =  tfidf_vect_ngram.transform(train_x)
+xvalid_tfidf_ngram =  tfidf_vect_ngram.transform(valid_x)
+
+# characters level tf-idf
+tfidf_vect_ngram_chars = TfidfVectorizer(analyzer='char', token_pattern=r'\w{1,}', ngram_range=(2,3), max_features=5000)
+tfidf_vect_ngram_chars.fit(df_train['text'])
+xtrain_tfidf_ngram_chars =  tfidf_vect_ngram_chars.transform(train_x) 
+xvalid_tfidf_ngram_chars =  tfidf_vect_ngram_chars.transform(valid_x) 
+print('ngram level tf-dif completed')
+
+# load the pre-trained word-embedding vectors 
+embeddings_index = {}
+for i, line in enumerate(open(r'C:\Data\Python\cdc_text2\wiki-news-300d-1M.vec', encoding="utf8")):
+    values = line.split()
+    embeddings_index[values[0]] = numpy.asarray(values[1:], dtype='float32')
+
+# create a tokenizer 
+token = text.Tokenizer()
+token.fit_on_texts(df_train['text'])
+word_index = token.word_index
+
+# convert text to sequence of tokens and pad them to ensure equal length vectors 
+train_seq_x = sequence.pad_sequences(token.texts_to_sequences(train_x), maxlen=70)
+valid_seq_x = sequence.pad_sequences(token.texts_to_sequences(valid_x), maxlen=70)
+print('beginning tokenisation')
+# create token-embedding mapping
+embedding_matrix = numpy.zeros((len(word_index) + 1, 300))
+for word, i in word_index.items():
+    embedding_vector = embeddings_index.get(word)
+    if embedding_vector is not None:
+        embedding_matrix[i] = embedding_vector
+
+df_train['char_count'] = df_train['text'].apply(len)
+df_train['word_count'] = df_train['text'].apply(lambda x: len(x.split()))
+df_train['word_density'] = df_train['char_count'] / (df_train['word_count']+1)
+df_train['punctuation_count'] = df_train['text'].apply(lambda x: len("".join(_ for _ in x if _ in string.punctuation))) 
+df_train['title_word_count'] = df_train['text'].apply(lambda x: len([wrd for wrd in x.split() if wrd.istitle()]))
+df_train['upper_case_word_count'] = df_train['text'].apply(lambda x: len([wrd for wrd in x.split() if wrd.isupper()]))
+
+pos_family = {
+    'noun' : ['NN','NNS','NNP','NNPS'],
+    'pron' : ['PRP','PRP$','WP','WP$'],
+    'verb' : ['VB','VBD','VBG','VBN','VBP','VBZ'],
+    'adj' :  ['JJ','JJR','JJS'],
+    'adv' : ['RB','RBR','RBS','WRB']
+}
+
+# function to check and get the part of speech tag count of a words in a given sentence
+def check_pos_tag(x, flag):
+    cnt = 0
+    try:
+        wiki = textblob.TextBlob(x)
+        for tup in wiki.tags:
+            ppo = list(tup)[1]
+            if ppo in pos_family[flag]:
+                cnt += 1
+    except:
+        pass
+    return cnt
+now = datetime.datetime.now()
+print(now)
+df_train['noun_count'] = df_train['text'].apply(lambda x: check_pos_tag(x, 'noun'))
+df_train['verb_count'] = df_train['text'].apply(lambda x: check_pos_tag(x, 'verb'))
+df_train['adj_count'] = df_train['text'].apply(lambda x: check_pos_tag(x, 'adj'))
+df_train['adv_count'] = df_train['text'].apply(lambda x: check_pos_tag(x, 'adv'))
+df_train['pron_count'] = df_train['text'].apply(lambda x: check_pos_tag(x, 'pron'))
+now2 = datetime.datetime.now()
+print(now2 - now)
+print('word tokeniser completed')
+
+# pickle.dump(df_train, open(r"c:\data\temp\df_train.p", "wb"))
+df_train = pickle.load(open(r'c:\data\temp\df_train.p', "rb"))
+#######
