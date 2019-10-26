@@ -1,0 +1,20 @@
+Hi Dani, 
+
+I don't seem to have push access to this repo, so I branched it and saved one in my github.
+
+Here is what I did so far:
+  1) pulled in the data and did a little EDA, but not as much as you
+  2) ran the text column through a couple text libraries in python
+      a) count vectors
+      b) tf_idf
+      c) tf_idf_ngram_vectors
+      d) word tokenising
+      
+if you can run the python script and repoint the data imports to your files, you can see all the files.
+
+If that's not feasible right now, I will try to upload the csv of the tokenised output.  I haven't run any models on it, except NB Multinomial, but it 
+was abyssmal.
+
+I will keep working on it, but I think this is a good direction to go with the features.
+
+Scott
